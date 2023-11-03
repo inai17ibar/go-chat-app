@@ -1,21 +1,69 @@
 package auth
 
 import (
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 var (
-	// これはサンプルです。実際のアプリケーションでは秘密のキーを安全に保管してください。
-	jwtSecret = []byte("your_secret_key")
+	jwtSecret = []byte(os.Getenv("JWT_SECRET_KEY")) //見つからないときは空を返すので注意
+	db        *gorm.DB
 )
 
 type Credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+}
+
+type User struct {
+	ID             uint   `gorm:"primaryKey"`
+	Username       string `gorm:"uniqueIndex"`
+	HashedPassword string
+}
+
+func init() {
+	var err error
+	db, err = gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
+	if err != nil {
+		panic("failed to connect to database")
+	}
+
+	db.AutoMigrate(&User{})
+}
+
+func Register(c *gin.Context) {
+	var creds Credentials
+
+	if err := c.BindJSON(&creds); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing username or password"})
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error hashing password"})
+		return
+	}
+
+	user := User{
+		Username:       creds.Username,
+		HashedPassword: string(hashedPassword),
+	}
+
+	if err := db.Create(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error registering user"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
 }
 
 func Login(c *gin.Context) {
@@ -26,9 +74,15 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// この部分はデモ用です。実際のシステムではデータベースを使用して認証を行う必要があります。
-	if creds.Username != "user" || creds.Password != "password" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+	var user User
+	if err := db.Where("username = ?", creds.Username).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Username not found"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(creds.Password)); err != nil {
+		log.Printf("bcrypt error: %v", err) // この行を追加
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
 
@@ -45,22 +99,4 @@ func Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": t})
-}
-
-func Welcome(c *gin.Context) {
-	tokenString := c.Request.Header.Get("Authorization")
-
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
-	})
-
-	if err != nil || !token.Valid {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-		return
-	}
-
-	claims, _ := token.Claims.(jwt.MapClaims)
-	user := claims["name"].(string)
-
-	c.JSON(http.StatusOK, gin.H{"message": "Welcome " + user})
 }

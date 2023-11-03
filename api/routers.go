@@ -21,9 +21,6 @@ func SetupRoutes(r *gin.Engine) {
 	})
 
 	// Auth routes
-	r.POST("/login", auth.Login)
-	r.POST("/welcome", auth.Welcome)
-
-	// Auth routes
-	// ... You can define routes for login, registration, etc. here.
+	r.POST("/auth/login", auth.Login)
+	r.POST("/auth/register", auth.Register)
 }
