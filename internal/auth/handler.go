@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"go-chat-app/internal/model"
+
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -18,17 +20,6 @@ var (
 	db        *gorm.DB
 )
 
-type Credentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type User struct {
-	ID             uint   `gorm:"primaryKey"`
-	Username       string `gorm:"uniqueIndex"`
-	HashedPassword string
-}
-
 func init() {
 	var err error
 	db, err = gorm.Open(sqlite.Open("test.db"), &gorm.Config{})
@@ -36,11 +27,11 @@ func init() {
 		panic("failed to connect to database")
 	}
 
-	db.AutoMigrate(&User{})
+	db.AutoMigrate(&model.User{})
 }
 
 func Register(c *gin.Context) {
-	var creds Credentials
+	var creds model.Credentials
 
 	if err := c.BindJSON(&creds); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing username or password"})
@@ -53,7 +44,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	user := User{
+	user := model.User{
 		Username:       creds.Username,
 		HashedPassword: string(hashedPassword),
 	}
@@ -67,14 +58,14 @@ func Register(c *gin.Context) {
 }
 
 func Login(c *gin.Context) {
-	var creds Credentials
+	var creds model.Credentials
 
 	if err := c.BindJSON(&creds); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing username or password"})
 		return
 	}
 
-	var user User
+	var user model.User
 	if err := db.Where("username = ?", creds.Username).First(&user).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Username not found"})
 		return
@@ -99,4 +90,32 @@ func Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": t})
+}
+
+func DeleteAccount(c *gin.Context) {
+	var creds model.Credentials
+
+	if err := c.BindJSON(&creds); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing username or password"})
+		return
+	}
+
+	var user model.User
+	if err := db.Where("username = ?", creds.Username).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Username not found"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(creds.Password)); err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
+		return
+	}
+
+	// 論理削除
+	if err := db.Delete(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deleting account"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Account deleted successfully"})
 }

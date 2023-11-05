@@ -12,7 +12,7 @@ func SetupRoutes(r *gin.Engine) {
 	// CORS middleware
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
-	config.AllowMethods = []string{"GET", "POST"}
+	config.AllowMethods = []string{"GET", "POST", "DELETE"}
 	r.Use(cors.New(config))
 
 	// Chat routes
@@ -23,4 +23,5 @@ func SetupRoutes(r *gin.Engine) {
 	// Auth routes
 	r.POST("/auth/login", auth.Login)
 	r.POST("/auth/register", auth.Register)
+	r.DELETE("/auth/delete", auth.DeleteAccount)
 }
