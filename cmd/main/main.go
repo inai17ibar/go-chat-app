@@ -20,5 +20,7 @@ func main() {
 
 	r := gin.Default()
 	api.SetupRoutes(r)
+	// 実際のデプロイ時にはHTTPSを使用してサーバーを起動することをおすすめします。
+	// r.RunTLS(":8000", "path_to_certfile", "path_to_keyfile")
 	r.Run(":8000")
 }
