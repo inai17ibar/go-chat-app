@@ -69,6 +69,7 @@ func SetupRoutes(r *gin.Engine) {
 
 	// Auth routes
 	r.POST("/auth/login", auth.Login)
+	r.POST("/auth/logout", auth.Logout)
 	r.POST("/auth/register", auth.Register)
 	r.DELETE("/auth/delete", auth.AuthMiddleware(), auth.DeleteAccount)
 }

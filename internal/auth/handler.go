@@ -14,6 +14,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/gin-contrib/sessions"
 )
 
 var (
@@ -117,12 +119,19 @@ func Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Username not found"})
 		return
 	}
+	log.Printf("user: %v", user) // この行を追加
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.HashedPassword), []byte(creds.Password)); err != nil {
 		log.Printf("bcrypt error: %v", err) // この行を追加
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid password"})
 		return
 	}
+
+	// ログイン成功時の処理
+	// セッションにユーザー情報を格納
+	session := sessions.Default(c)
+	session.Set("user_id", user.ID)
+	session.Save()
 
 	token := jwt.New(jwt.SigningMethodHS256)
 
@@ -137,6 +146,16 @@ func Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": t})
+}
+
+// ログアウトAPIの実装
+func Logout(c *gin.Context) {
+	// セッション情報をクリア
+	session := sessions.Default(c)
+	session.Clear()
+	session.Save()
+
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
 func DeleteAccount(c *gin.Context) {
